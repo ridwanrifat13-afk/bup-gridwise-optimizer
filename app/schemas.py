@@ -52,6 +52,11 @@ def _num(value, field: str) -> float:
 def parse_scenario(body) -> Scenario:
     if not isinstance(body, dict):
         raise RequestError(400, "request body must be a JSON object")
+    # Accept a sample-pack case wrapper like {"id": ..., "label": ..., "input": {...request...}}.
+    if "scenario_id" not in body:
+        inner = next((body[k] for k in ("input", "request") if isinstance(body.get(k), dict)), None)
+        if inner is not None:
+            body = inner
 
     sid = body.get("scenario_id")
     if not isinstance(sid, str) or not sid.strip():

@@ -52,6 +52,13 @@ def test_hours_out_of_order_are_accepted():
     assert client.post("/optimize-energy", json=body).status_code == 200
 
 
+def test_sample_case_wrapper_is_unwrapped():
+    body = make_scenario(7, notes=["The cafeteria menu changes tomorrow."], sid="SAMPLE-01")
+    r = client.post("/optimize-energy", json={"id": "SAMPLE-01", "label": "demo", "input": body})
+    assert r.status_code == 200
+    assert r.json()["scenario_id"] == "SAMPLE-01"
+
+
 def test_malformed_json():
     r = client.post("/optimize-energy", content=b"{not json", headers={"content-type": "application/json"})
     assert r.status_code == 400

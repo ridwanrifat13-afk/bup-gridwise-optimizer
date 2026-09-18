@@ -6,5 +6,10 @@
       "excludeFiles": "{.venv/**,tests/**,samples/**,scripts/**,docs/**}"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    { "source": "/favicon.ico", "destination": "/public/favicon.ico" },
+    { "source": "/assets/(.*)", "destination": "/public/assets/$1" },
+    { "source": "/", "destination": "/public/index.html" },
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
 }

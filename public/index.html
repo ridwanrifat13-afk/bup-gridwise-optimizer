@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GridWise Energy Optimizer</title>
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/icon.png" />
+  <style>
+    :root{
+      /* palette 000000 · 1F150C · 412D15 · E1DCC9 */
+      --black:#000000; --umber-900:#1F150C; --umber-600:#412D15; --cream:#E1DCC9;
+      --bg:var(--black); --panel:var(--umber-900); --card:#291c10; --field:#0d0905; --line:var(--umber-600); --line2:#5c4222;
+      --text:#EEEADD; --muted:#b0a58c; --faint:#857960;
+      --accent:var(--cream); --accent-ink:var(--black); --info:#a9b8d6; --solar:#e8b35a; --violet:#c9a0dc; --charge:#8fcaa4;
+      --bad:#f08a7e; --ok:#8fcaa4;
+      --radius:12px;
+      --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--text);
+      font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.45}
+    code{font-family:var(--mono);font-size:12px;background:var(--field);border:1px solid var(--line);
+      padding:1px 6px;border-radius:4px;color:var(--cream)}
+    .hidden{display:none !important}
+
+    /* ── header ── */
+    header{position:sticky;top:0;z-index:5;background:rgba(0,0,0,.88);backdrop-filter:blur(8px);
+      border-bottom:1px solid var(--line);padding:14px 32px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    .brand{display:flex;align-items:center;gap:14px}
+    .brand img{height:40px;width:auto;display:block}
+    .brand h1{margin:0;line-height:0}
+    .brand .sub{color:var(--muted);font-size:12px;padding-left:14px;border-left:1px solid var(--line)}
+    @media (max-width:640px){.brand .sub{display:none}}
+    .pill{margin-left:auto;display:flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--line2);
+      border-radius:999px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+    .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(143,202,164,.18)}
+
+    /* ── layout ── */
+    main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:24px;padding:24px 32px 32px;
+      max-width:1480px;margin:0 auto}
+    @media (max-width:1040px){main{grid-template-columns:1fr;padding:16px}header{padding:12px 16px}}
+    .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+    .col-title{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.14em;margin:2px 2px 0}
+    .col-title::after{content:"";flex:1;height:1px;background:var(--line)}
+
+    /* ── cards ── */
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+    .card-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+    .card-head h2{margin:0;font-size:14px;font-weight:600;color:var(--cream)}
+    .card-head .hint{margin-left:auto;font-size:12px;color:var(--muted)}
+    .step{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;
+      background:rgba(225,220,201,.12);color:var(--accent);border:1px solid rgba(225,220,201,.4);flex:none}
+    .card-body{padding:14px 16px 16px}
+    .card.featured{border-color:rgba(225,220,201,.45);box-shadow:0 0 0 1px rgba(225,220,201,.08),0 8px 30px -12px rgba(225,220,201,.25)}
+    .desc{font-size:13px;color:var(--muted);margin:0 0 10px}
+    .desc strong{color:var(--text);font-weight:600}
+
+    /* ── fields ── */
+    label,.lbl{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:500;color:#d9d2bf;margin:0 0 5px}
+    label .key{font-family:var(--mono);font-size:11px;color:var(--faint);font-weight:400}
+    .field{margin-top:12px}
+    .field:first-child{margin-top:0}
+    textarea,input[type=text],select{width:100%;background:var(--field);color:var(--text);border:1px solid var(--line2);
+      border-radius:8px;padding:9px 11px;font:inherit;font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+    input[type=text]{font-family:var(--mono)}
+    textarea{min-height:58px;resize:vertical}
+    textarea:focus,input:focus,select:focus{border-color:var(--info);box-shadow:0 0 0 3px rgba(169,184,214,.15)}
+    select{appearance:none;cursor:pointer;padding-right:30px;
+      background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+      background-position:calc(100% - 16px) 55%,calc(100% - 11px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+    .code{font-family:var(--mono);font-size:12px;line-height:1.5;min-height:190px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    @media (max-width:560px){.grid2,.grid3{grid-template-columns:1fr}}
+    .unit{position:relative}
+    .unit input{padding-right:52px}
+    .unit::after{content:attr(data-unit);position:absolute;right:10px;top:50%;transform:translateY(-50%);
+      font-size:11px;color:var(--faint);pointer-events:none}
+
+    /* ── notes ── */
+    .note-slot{border:1px solid var(--line);border-left:3px solid var(--info);border-radius:8px;padding:10px 12px;background:var(--card)}
+    .note-slot + .note-slot{margin-top:10px}
+    .note-slot .lbl{margin-bottom:6px}
+    .note-slot .lbl span:last-child{color:var(--faint);font-weight:400}
+    .chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .chip{font-size:11px;color:var(--muted);border:1px dashed var(--line2);padding:3px 9px;border-radius:999px;
+      cursor:pointer;user-select:none;transition:all .15s}
+    .chip:hover{color:var(--text);border-style:solid;border-color:var(--info);background:rgba(169,184,214,.08)}
+
+    /* ── buttons ── */
+    button{appearance:none;font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:9px 16px;cursor:pointer;
+      border:1px solid var(--line2);background:var(--card);color:var(--text);transition:all .15s;white-space:nowrap}
+    button:hover{border-color:var(--muted)}
+    button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+    button.primary:hover{filter:brightness(1.08)}
+    button.secondary{background:transparent;border-color:rgba(225,220,201,.55);color:var(--accent)}
+    button.secondary:hover{background:rgba(225,220,201,.08)}
+    button.lg{padding:12px 22px;font-size:14px}
+    button:disabled{opacity:.55;cursor:progress}
+    .actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .actions .grow{flex:1;min-width:0}
+    .status{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+    .status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint)}
+    .status.ok::before{background:var(--ok)} .status.bad::before{background:var(--bad)}
+    .status.busy::before{background:var(--solar);animation:pulse 1s infinite}
+    @keyframes pulse{50%{opacity:.3}}
+    .runbar{position:sticky;bottom:12px;display:flex;align-items:center;gap:14px;padding:12px 16px;
+      background:rgba(31,21,12,.95);backdrop-filter:blur(6px);border:1px solid var(--line2);border-radius:var(--radius);
+      box-shadow:0 10px 30px -10px rgba(0,0,0,.6)}
+    .err{color:var(--bad);font-size:13px;white-space:pre-wrap;background:rgba(240,138,126,.07);
+      border:1px solid rgba(240,138,126,.35);border-radius:8px;padding:10px 12px}
+
+    /* ── results ── */
+    .empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:56px 24px;color:var(--muted)}
+    .empty .big{font-size:15px;color:var(--text);font-weight:600}
+    .totals{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    @media (max-width:640px){.totals{grid-template-columns:1fr 1fr}}
+    .tot{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;border-top:3px solid var(--c,var(--info))}
+    .tot .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+    .tot .v{font-size:20px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums}
+    .tot .v small{font-size:12px;color:var(--muted);font-weight:500;margin-left:3px}
+    .sum{font-size:13.5px;color:#e4dfcf;line-height:1.6;margin:0}
+
+    .directions{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto}
+    .dir{border:1px solid var(--line);border-left:3px solid var(--faint);border-radius:8px;padding:10px 12px;background:var(--card)}
+    .dir.applies{border-left-color:var(--accent)}
+    .dir .top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .badge{font-size:10.5px;padding:2px 8px;border-radius:5px;font-weight:600;letter-spacing:.03em}
+    .badge.apply{background:rgba(225,220,201,.12);color:var(--accent);border:1px solid rgba(225,220,201,.35)}
+    .badge.noop{background:rgba(176,165,140,.1);color:var(--muted);border:1px solid var(--line2)}
+    .badge.type{background:rgba(169,184,214,.1);color:var(--info);border:1px solid rgba(169,184,214,.35);font-family:var(--mono)}
+    .badge.idx{background:transparent;color:var(--muted);border:1px solid var(--line2)}
+    .dir .note{font-size:13px;color:var(--text);margin-top:8px}
+    .dir .why{font-size:12px;color:var(--muted);margin-top:4px}
+    .dir .adj{font-size:11.5px;margin-top:8px;color:#d9d2bf;font-family:var(--mono);white-space:pre-wrap;
+      background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+
+    .chart{padding:4px 0 0}
+    .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:8px}
+    .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+    .legend i.line{height:3px;border-radius:2px;vertical-align:2px}
+
+    .tablewrap{max-height:360px;overflow:auto}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    th,td{padding:7px 12px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    thead th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:600;font-size:11px;
+      text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--line2)}
+    tbody tr{border-bottom:1px solid var(--line)}
+    tbody tr:nth-child(even){background:rgba(225,220,201,.025)}
+    tbody tr:hover{background:rgba(169,184,214,.06)}
+    th:first-child,td:first-child{text-align:left;color:var(--muted);font-family:var(--mono)}
+    td.act{text-align:center}
+    .act-pill{display:inline-block;min-width:74px;text-align:center;font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px}
+    .act-pill.charge{color:var(--charge);background:rgba(143,202,164,.13)}
+    .act-pill.discharge{color:var(--violet);background:rgba(201,160,220,.12)}
+    .act-pill.idle{color:var(--faint);background:rgba(176,165,140,.08)}
+    td.tariff{color:var(--solar)}
+
+    footer{padding:0 32px 28px;color:var(--faint);font-size:12px;max-width:1480px;margin:0 auto}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1><img src="/assets/logo.png" alt="GridWise" width="101" height="40" /></h1>
+      <div class="sub">Energy Optimizer · BUP CSE Fest 2026<br>LLM directive interpreter + LP battery scheduler</div>
+    </div>
+    <span class="pill" id="apiUrl">api: same origin</span>
+  </header>
+
+  <main>
+    <!-- ───────── LEFT: request builder ───────── -->
+    <div class="col">
+      <div class="col-title">Input</div>
+
+      <section class="card featured" id="pasteBox">
+        <div class="card-head">
+          <span class="step">1</span><h2>Paste JSON input</h2>
+          <span class="hint">fastest way to run a case</span>
+        </div>
+        <div class="card-body">
+          <p class="desc">Paste a request, a sample case (<code>{"id","label","input"}</code>) or a whole sample pack. <strong>Load JSON</strong> fills the form below; <strong>Load &amp; run</strong> optimises straight away.</p>
+          <textarea id="rawReq" class="code" spellcheck="false"
+            placeholder='{&#10;  "id": "SAMPLE-01",&#10;  "label": "…",&#10;  "input": {&#10;    "scenario_id": "SAMPLE-01",&#10;    "operator_notes": ["…"],&#10;    "hours": [ …24 entries… ],&#10;    "battery": { … }&#10;  }&#10;}'></textarea>
+          <div id="casePickRow" class="field hidden">
+            <label>Case from pasted pack</label>
+            <select id="casePick"></select>
+          </div>
+          <div class="actions">
+            <span class="grow"><span id="rawStatus" class="status">waiting for JSON</span></span>
+            <button id="rawLoadBtn" type="button">Load JSON</button>
+            <button id="rawRunBtn" type="button" class="secondary">Load &amp; run ▸</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="step">2</span><h2>Scenario &amp; operator notes</h2><span class="hint">1–3 notes</span></div>
+        <div class="card-body">
+          <div class="grid2">
+            <div>
+              <label>Scenario ID <span class="key">scenario_id</span></label>
+              <input id="sid" type="text" value="GRID-101" />
+            </div>
+            <div>
+              <label>API base URL <span class="key">optional</span></label>
+              <input id="baseUrl" type="text" placeholder="same origin" />
+            </div>
+          </div>
+          <div class="field" id="notesArea">
+            <div class="note-slot">
+              <div class="lbl"><span>Note 1</span><span>click a suggestion to fill</span></div>
+              <textarea data-i="0" placeholder="e.g. Solar output will drop to about 20% from 1 PM to 3 PM."></textarea>
+              <div class="chiprow"></div>
+            </div>
+            <div class="note-slot">
+              <div class="lbl"><span>Note 2</span><span>optional</span></div>
+              <textarea data-i="1" placeholder="e.g. Do not charge the battery between 2 PM and 4 PM."></textarea>
+              <div class="chiprow"></div>
+            </div>
+            <div class="note-slot">
+              <div class="lbl"><span>Note 3</span><span>optional</span></div>
+              <textarea data-i="2" placeholder="e.g. The cafeteria menu changes tomorrow."></textarea>
+              <div class="chiprow"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="step">3</span><h2>Battery</h2><span class="hint">all values in kWh</span></div>
+        <div class="card-body">
+          <div class="grid3">
+            <div>
+              <label>Capacity</label>
+              <div class="unit" data-unit="kWh"><input id="bCap" type="text" value="500" /></div>
+            </div>
+            <div>
+              <label>Initial energy</label>
+              <div class="unit" data-unit="kWh"><input id="bInit" type="text" value="200" /></div>
+            </div>
+            <div>
+              <label>Minimum energy</label>
+              <div class="unit" data-unit="kWh"><input id="bMin" type="text" value="50" /></div>
+            </div>
+          </div>
+          <div class="grid2 field">
+            <div>
+              <label>Max charge rate</label>
+              <div class="unit" data-unit="kWh/h"><input id="bCh" type="text" value="100" /></div>
+            </div>
+            <div>
+              <label>Max discharge rate</label>
+              <div class="unit" data-unit="kWh/h"><input id="bDis" type="text" value="100" /></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="step">4</span><h2>24-hour load profile</h2><span class="hint">demand · solar · tariff</span></div>
+        <div class="card-body">
+          <div class="actions" style="margin-top:0">
+            <div class="grow">
+              <select id="profile">
+                <option value="workday" selected>Weekday (sample)</option>
+                <option value="weekend">Weekend (lower evening peak)</option>
+                <option value="flat">Flat 200 kWh / no solar</option>
+                <option value="custom">Custom (from pasted JSON)</option>
+              </select>
+            </div>
+            <button id="fillBtn" type="button">Reset to preset</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="err hidden" id="err"></div>
+
+      <div class="runbar">
+        <button id="runBtn" type="button" class="primary lg">Run optimisation ▸</button>
+        <span class="status" id="status">idle</span>
+      </div>
+    </div>
+
+    <!-- ───────── RIGHT: response ───────── -->
+    <div class="col">
+      <div class="col-title">Result</div>
+
+      <section class="card" id="empty">
+        <div class="empty">
+          <div class="big">No result yet</div>
+          <div>Paste a case and press <strong>Load &amp; run</strong>, or fill the form and press <strong>Run optimisation</strong>.</div>
+        </div>
+      </section>
+
+      <div id="result" class="col hidden">
+        <div class="totals">
+          <div class="tot" style="--c:var(--info)"><div class="k">Total grid</div><div class="v" id="tGrid">—</div></div>
+          <div class="tot" style="--c:var(--accent)"><div class="k">Total cost</div><div class="v" id="tCost">—</div></div>
+          <div class="tot" style="--c:var(--solar)"><div class="k">Peak grid</div><div class="v" id="tPeak">—</div></div>
+          <div class="tot" style="--c:var(--violet)"><div class="k">Latency</div><div class="v" id="tMs">—</div></div>
+        </div>
+
+        <section class="card">
+          <div class="card-head"><h2>Plan summary</h2></div>
+          <div class="card-body"><p class="sum" id="summary"></p></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Directive interpretation</h2><span class="hint">how each note was read</span></div>
+          <div class="card-body"><div class="directions" id="dirs"></div></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Hourly schedule</h2></div>
+          <div class="card-body"><div class="chart" id="chart"></div></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Hourly plan</h2><span class="hint">kWh · tariff in BDT/kWh</span></div>
+          <div class="tablewrap">
+            <table id="hourTbl">
+              <thead>
+                <tr>
+                  <th>Hour</th><th>Demand</th><th>Solar used</th><th>Grid</th>
+                  <th>Battery</th><th style="text-align:center">Action</th><th>Tariff</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Same JSON contract as <code>POST /optimize-energy</code>. Judges call the HTTP endpoint directly — this page is a demo only.
+  </footer>
+
+<script>
+// ───────── Suggestion chips for the three note slots ─────────
+const SUGGESTIONS = {
+  0: [
+    "Solar output will drop to about 20% from 1 PM to 3 PM.",
+    "Only half the panels will work from 11 AM to 2 PM.",
+    "Solar is fully available all day.",
+  ],
+  1: [
+    "Do not charge the battery between 2 PM and 4 PM.",
+    "Battery cannot discharge from 6 PM to 10 PM.",
+    "No battery windows in effect.",
+  ],
+  2: [
+    "The data center requires at least 80 kWh in the battery from 6 PM to 10 PM.",
+    "Cap grid imports at 155 kWh from 6 PM to 9 PM.",
+    "The cafeteria menu changes tomorrow.",
+  ],
+};
+
+// ───────── Three preset scenarios mirroring samples/example_request.json ─────────
+const SAMPLE_REQUEST = {
+  scenario_id: "GRID-101",
+  operator_notes: [
+    "Solar output will drop to about 20% from 1 PM to 3 PM.",
+    "Do not charge the battery between 2 PM and 4 PM.",
+    "The cafeteria menu changes tomorrow.",
+  ],
+  hours: [
+    {hour:0,demand_kwh:126.8,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:1,demand_kwh:133.2,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:2,demand_kwh:247.4,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:3,demand_kwh:132.0,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:4,demand_kwh:153.7,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:5,demand_kwh:128.3,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:6,demand_kwh:252.6,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+    {hour:7,demand_kwh:201.6,solar_kwh:41.5,tariff_bdt_per_kwh:9},
+    {hour:8,demand_kwh:202.0,solar_kwh:79.2,tariff_bdt_per_kwh:9},
+    {hour:9,demand_kwh:151.0,solar_kwh:173.0,tariff_bdt_per_kwh:9},
+    {hour:10,demand_kwh:138.6,solar_kwh:191.6,tariff_bdt_per_kwh:9},
+    {hour:11,demand_kwh:195.7,solar_kwh:238.6,tariff_bdt_per_kwh:9},
+    {hour:12,demand_kwh:198.4,solar_kwh:265.9,tariff_bdt_per_kwh:9},
+    {hour:13,demand_kwh:134.4,solar_kwh:238.7,tariff_bdt_per_kwh:9},
+    {hour:14,demand_kwh:146.3,solar_kwh:144.2,tariff_bdt_per_kwh:9},
+    {hour:15,demand_kwh:219.7,solar_kwh:173.9,tariff_bdt_per_kwh:9},
+    {hour:16,demand_kwh:206.7,solar_kwh:117.2,tariff_bdt_per_kwh:9},
+    {hour:17,demand_kwh:254.4,solar_kwh:73.0,tariff_bdt_per_kwh:12},
+    {hour:18,demand_kwh:245.2,solar_kwh:0.0,tariff_bdt_per_kwh:12},
+    {hour:19,demand_kwh:230.6,solar_kwh:0.0,tariff_bdt_per_kwh:12},
+    {hour:20,demand_kwh:205.2,solar_kwh:0.0,tariff_bdt_per_kwh:12},
+    {hour:21,demand_kwh:191.5,solar_kwh:0.0,tariff_bdt_per_kwh:12},
+    {hour:22,demand_kwh:189.3,solar_kwh:0.0,tariff_bdt_per_kwh:12},
+    {hour:23,demand_kwh:182.8,solar_kwh:0.0,tariff_bdt_per_kwh:7},
+  ],
+  battery: {
+    capacity_kwh: 500,
+    initial_energy_kwh: 200,
+    minimum_energy_kwh: 50,
+    max_charge_kwh_per_hour: 100,
+    max_discharge_kwh_per_hour: 100,
+  },
+};
+
+// quick synthetic profiles for the dropdown
+const WEEKEND = JSON.parse(JSON.stringify(SAMPLE_REQUEST));
+WEEKEND.scenario_id = "GRID-WEEKEND";
+WEEKEND.operator_notes = [
+  "All panels are online all day.",
+  "Battery may be used freely all day.",
+  "Cap grid imports at 120 kWh from 7 PM to 10 PM.",
+];
+WEEKEND.hours.forEach(h=>{
+  if (h.hour>=8 && h.hour<=22) h.demand_kwh = +(h.demand_kwh*0.75).toFixed(1);
+  if (h.hour>=19 && h.hour<=22) h.demand_kwh = +(h.demand_kwh*1.10).toFixed(1); // small evening bump
+});
+const FLAT = JSON.parse(JSON.stringify(SAMPLE_REQUEST));
+FLAT.scenario_id = "GRID-FLAT";
+FLAT.operator_notes = [
+  "Solar panels are offline all day.",
+  "Battery may be used freely all day.",
+  "There are no operational notes today.",
+];
+FLAT.hours.forEach(h=>{ h.demand_kwh = 200; h.solar_kwh = 0; });
+
+const PROFILES = { workday: SAMPLE_REQUEST, weekend: WEEKEND, flat: FLAT, custom: SAMPLE_REQUEST };
+
+// ───────── DOM helpers ─────────
+const $ = (s, root=document) => root.querySelector(s);
+const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
+const num = (v, fallback=0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+// ───────── Wire suggestion chips ─────────
+function renderChips() {
+  $$("textarea[data-i]").forEach((t)=>{
+    const i = +t.dataset.i;
+    const root = t.parentElement.querySelector(".chiprow");
+    root.innerHTML = "";
+    SUGGESTIONS[i].forEach((s)=>{
+      const c = document.createElement("span");
+      c.className = "chip";
+      c.textContent = s.length > 50 ? s.slice(0,48)+"…" : s;
+      c.title = s;
+      c.onclick = () => { t.value = s; t.focus(); };
+      root.appendChild(c);
+    });
+  });
+}
+
+// ───────── Build the request body from the form ─────────
+function buildRequest() {
+  const notes = $$("#notesArea textarea")
+    .map(t => t.value.trim())
+    .filter(Boolean);
+  if (notes.length === 0) throw new Error("add at least one operator note");
+  const profileKey = $("#profile").value;
+  const tmpl = PROFILES[profileKey];
+  const hours = tmpl.hours.map(h => ({...h}));
+  return {
+    scenario_id: $("#sid").value.trim() || "DEMO",
+    operator_notes: notes,
+    hours,
+    battery: {
+      capacity_kwh: num($("#bCap").value, 500),
+      initial_energy_kwh: num($("#bInit").value, 200),
+      minimum_energy_kwh: num($("#bMin").value, 50),
+      max_charge_kwh_per_hour: num($("#bCh").value, 100),
+      max_discharge_kwh_per_hour: num($("#bDis").value, 100),
+    },
+  };
+}
+
+// ───────── API call ─────────
+async function callApi(body) {
+  const base = $("#baseUrl").value.trim().replace(/\/+$/,"");
+  const url = (base || "") + "/optimize-energy";
+  $("#apiUrl").textContent = "api: " + (url.startsWith("http") ? url : location.origin + url);
+  const t0 = performance.now();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  const ms = Math.round(performance.now() - t0);
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { throw new Error(`HTTP ${res.status}: ${text.slice(0,200)}`); }
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${json.error || text.slice(0,200)}`);
+  return { json, ms };
+}
+
+// ───────── Render the response ─────────
+function renderResult(json, ms) {
+  $("#empty").classList.add("hidden");
+  $("#result").classList.remove("hidden");
+  $("#err").classList.add("hidden");
+
+  const fmt = (v, d) => Number(v ?? 0).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
+  $("#tGrid").innerHTML = `${fmt(json.total_grid_kwh,1)}<small>kWh</small>`;
+  $("#tCost").innerHTML = `${fmt(json.total_cost_bdt,2)}<small>BDT</small>`;
+  $("#tPeak").innerHTML = `${fmt(json.peak_grid_kwh,1)}<small>kWh</small>`;
+  $("#tMs").innerHTML   = `${fmt(ms,0)}<small>ms</small>`;
+
+  // directives
+  const dirs = $("#dirs");
+  dirs.innerHTML = "";
+  (json.directive_interpretation || []).forEach((d) => {
+    const el = document.createElement("div");
+    el.className = "dir" + (d.applies ? " applies" : "");
+    const applies = d.applies;
+    const dt = d.directive_type || "no_op";
+    const adj = d.structured_adjustment;
+    const adjText = adj ? JSON.stringify(adj).replaceAll(",", ", ").replaceAll(":", ": ") : "";
+    el.innerHTML = `
+      <div class="top">
+        <span class="badge idx">Note ${(+d.note_index || 0) + 1}</span>
+        <span class="badge ${applies ? "apply" : "noop"}">${applies ? "Applied" : "Ignored"}</span>
+        <span class="badge type">${escapeHtml(dt)}</span>
+      </div>
+      <div class="note">${escapeHtml(d.note || "")}</div>
+      <div class="why">${escapeHtml(d.explanation || "")}</div>
+      ${adjText ? `<div class="adj">${escapeHtml(adjText)}</div>` : ""}`;
+    dirs.appendChild(el);
+  });
+
+  $("#summary").textContent = json.plan_summary || "";
+
+  // schedule chart (inline SVG, no deps)
+  renderChart(json.hourly_plan || []);
+  // table
+  const tbody = $("#hourTbl tbody");
+  tbody.innerHTML = "";
+  (json.hourly_plan || []).forEach((h)=>{
+    const tr = document.createElement("tr");
+    const actCls = h.battery_action === "charge" ? "charge"
+                 : h.battery_action === "discharge" ? "discharge" : "idle";
+    tr.innerHTML = `
+      <td>${String(h.hour).padStart(2,"0")}:00</td>
+      <td>${(+h.demand_kwh).toFixed(1)}</td>
+      <td>${(+h.solar_kwh).toFixed(1)}</td>
+      <td>${(+h.grid_kwh).toFixed(1)}</td>
+      <td>${(+h.battery_kwh).toFixed(1)}</td>
+      <td class="act"><span class="act-pill ${actCls}">${h.battery_action}</span></td>
+      <td class="tariff">${(+h.tariff_bdt_per_kwh).toFixed(0)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderChart(plan) {
+  const host = $("#chart");
+  host.innerHTML = "";
+  if (plan.length !== 24) return;
+
+  const W = host.clientWidth || 720;
+  const H = 180;
+  const P = { l:36, r:12, t:14, b:22 };
+  const innerW = W - P.l - P.r;
+  const innerH = H - P.t - P.b;
+
+  const maxY = Math.max(
+    10, ...plan.map(h => +h.demand_kwh),
+    ...plan.map(h => +h.solar_kwh + (+h.battery_kwh||0))
+  );
+  const x = (i) => P.l + (i/23)*innerW;
+  const y = (v) => P.t + innerH - (v/maxY)*innerH;
+
+  // Y grid + labels
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(maxY*f));
+  let grid = "";
+  ticks.forEach((t)=>{
+    const yy = y(t);
+    grid += `<line x1="${P.l}" x2="${W-P.r}" y1="${yy}" y2="${yy}" stroke="#2e2013" stroke-width="1"/>`;
+    grid += `<text x="${P.l-6}" y="${yy+4}" text-anchor="end" font-size="10" fill="#857960">${t}</text>`;
+  });
+
+  // build solar+discharge area (clean) and demand line
+  let solarPath = "", demandPath = "", netPath = "", battBars = "";
+  let lastBatt = plan[0]?.battery_kwh ?? 0;
+  for (let i=0;i<24;i++){
+    const h = plan[i];
+    const s = +h.solar_kwh;
+    const g = +h.grid_kwh;
+    const net = s + g + (+h.battery_action==="discharge"? +h.battery_kwh : 0)
+              - (+h.battery_action==="charge" ? +h.battery_kwh : 0);
+    const x0 = x(i), x1 = x(i+1);
+    solarPath  += `${i===0?"M":"L"}${x0},${y(s)} ${x1},${y(s)} `;
+    demandPath += `${i===0?"M":"L"}${x0},${y(h.demand_kwh)} ${x1},${y(h.demand_kwh)} `;
+    netPath    += `${i===0?"M":"L"}${x0},${y(net)} ${x1},${y(net)} `;
+    // battery bar: charge green tall, discharge blue tall, idle thin
+    const a = h.battery_action;
+    const bh = a==="idle" ? 4 : 14;
+    const color = a==="charge" ? "#8fcaa4" : a==="discharge" ? "#c9a0dc" : "#5c4222";
+    battBars += `<rect x="${x0+1}" y="${y(Math.abs(+h.battery_kwh||0))-bh/2}" width="${Math.max(2,(x1-x0)-2)}" height="${bh}" fill="${color}" opacity="${a==='idle'?.4:0.85}" />`;
+  }
+
+  // hour ticks
+  let xLabels = "";
+  for (let i=0;i<24;i+=3){
+    xLabels += `<text x="${x(i)}" y="${H-P.b+14}" text-anchor="middle" font-size="10" fill="#857960">${String(i).padStart(2,"0")}</text>`;
+  }
+
+  // demand fill below
+  let demandFill = `M${P.l},${y(0)} `;
+  for (let i=0;i<24;i++){
+    demandFill += `L${x(i)},${y(plan[i].demand_kwh)} L${x(i+1)},${y(plan[i].demand_kwh)} `;
+  }
+  demandFill += `L${x(23)},${y(0)} Z`;
+
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block">
+      ${grid}
+      <path d="${demandFill}" fill="#a9b8d6" fill-opacity="0.08" />
+      <path d="${demandPath}" fill="none" stroke="#a9b8d6" stroke-width="2" />
+      <path d="${solarPath}"  fill="none" stroke="#e8b35a" stroke-width="2" />
+      ${battBars}
+      ${xLabels}
+    </svg>
+    <div class="legend">
+      <span><i class="line" style="background:#a9b8d6"></i>Demand</span>
+      <span><i class="line" style="background:#e8b35a"></i>Solar used</span>
+      <span><i style="background:#8fcaa4"></i>Charge</span>
+      <span><i style="background:#c9a0dc"></i>Discharge</span>
+      <span><i style="background:#5c4222"></i>Idle</span>
+    </div>`;
+  host.innerHTML = svg;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#39;");
+}
+
+// ───────── Wire UI ─────────
+function fillFromSample(){
+  const profileKey = $("#profile").value;
+  const r = PROFILES[profileKey];
+  $("#sid").value = r.scenario_id;
+  $$("#notesArea textarea").forEach((t)=>{
+    const i = +t.dataset.i;
+    t.value = r.operator_notes[i] || "";
+  });
+  const b = r.battery;
+  $("#bCap").value = b.capacity_kwh;
+  $("#bInit").value = b.initial_energy_kwh;
+  $("#bMin").value = b.minimum_energy_kwh;
+  $("#bCh").value = b.max_charge_kwh_per_hour;
+  $("#bDis").value = b.max_discharge_kwh_per_hour;
+}
+
+// ───────── Parse + validate a pasted full request JSON ─────────
+function validateRequest(obj) {
+  const errs = [];
+  if (!obj || typeof obj !== "object") { return ["root must be an object"]; }
+  if (typeof obj.scenario_id !== "string" || !obj.scenario_id.trim()) errs.push("scenario_id must be a non-empty string");
+  if (!Array.isArray(obj.operator_notes) || obj.operator_notes.length < 1 || obj.operator_notes.length > 3) {
+    errs.push("operator_notes must be an array of 1–3 strings");
+  } else if (!obj.operator_notes.every(s => typeof s === "string" && s.trim())) {
+    errs.push("every operator_notes entry must be a non-empty string");
+  }
+  if (!Array.isArray(obj.hours) || obj.hours.length !== 24) {
+    errs.push("hours must be an array of exactly 24 entries");
+  } else {
+    const seen = new Set();
+    obj.hours.forEach((h, i) => {
+      if (!h || typeof h !== "object") return errs.push(`hours[${i}] must be an object`);
+      if (!Number.isInteger(h.hour) || h.hour < 0 || h.hour > 23) errs.push(`hours[${i}].hour must be int 0–23`);
+      else if (seen.has(h.hour)) errs.push(`hours[${i}].hour ${h.hour} is duplicated`);
+      seen.add(h.hour);
+      if (typeof h.demand_kwh !== "number" || !Number.isFinite(h.demand_kwh)) errs.push(`hours[${i}].demand_kwh must be a number`);
+      if (typeof h.solar_kwh !== "number" || !Number.isFinite(h.solar_kwh)) errs.push(`hours[${i}].solar_kwh must be a number`);
+      if (typeof h.tariff_bdt_per_kwh !== "number" || !Number.isFinite(h.tariff_bdt_per_kwh)) errs.push(`hours[${i}].tariff_bdt_per_kwh must be a number`);
+    });
+  }
+  const b = obj.battery;
+  if (!b || typeof b !== "object") { errs.push("battery must be an object"); }
+  else {
+    for (const k of ["capacity_kwh","initial_energy_kwh","minimum_energy_kwh","max_charge_kwh_per_hour","max_discharge_kwh_per_hour"]) {
+      if (typeof b[k] !== "number" || !Number.isFinite(b[k])) errs.push(`battery.${k} must be a number`);
+    }
+  }
+  return errs;
+}
+
+// JSON.parse, retrying once with any unclosed brackets closed (common when copy-pasting a case)
+function parseLenient(src) {
+  try { return JSON.parse(src); }
+  catch (e) {
+    const stack = [];
+    let inStr = false, esc = false;
+    for (const ch of src) {
+      if (inStr) { if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false; continue; }
+      if (ch === '"') inStr = true;
+      else if (ch === "{" || ch === "[") stack.push(ch === "{" ? "}" : "]");
+      else if (ch === "}" || ch === "]") stack.pop();
+    }
+    if (inStr || !stack.length) throw e;
+    return JSON.parse(src.replace(/,\s*$/, "") + stack.reverse().join(""));
+  }
+}
+
+const REQUEST_KEYS = ["input", "request", "scenario", "request_body"];
+const PACK_KEYS = ["cases", "samples", "public_cases", "scenarios", "test_cases"];
+
+// Accept a bare request, a {id,label,input} case wrapper, or a pack (array / {cases:[...]}).
+// Returns [{name, request}, ...].
+function extractCases(obj) {
+  let list = null;
+  if (Array.isArray(obj)) list = obj;
+  else if (obj && typeof obj === "object") {
+    const k = PACK_KEYS.find(k => Array.isArray(obj[k]));
+    if (k) list = obj[k];
+  }
+  const unwrap = (c) => {
+    if (c && typeof c === "object" && typeof c.scenario_id !== "string") {
+      const k = REQUEST_KEYS.find(k => c[k] && typeof c[k] === "object" && !Array.isArray(c[k]));
+      if (k) return c[k];
+    }
+    return c;
+  };
+  return (list || [obj]).map((c, i) => {
+    const req = unwrap(c);
+    const name = [c && c.id, c && c.label].filter(Boolean).join(" · ") || (req && req.scenario_id) || `case ${i + 1}`;
+    return { name, request: req };
+  });
+}
+
+let pastedCases = [];
+
+function loadFromRawJson() {
+  const status = $("#rawStatus");
+  const err = $("#err");
+  err.classList.add("hidden");
+  const src = $("#rawReq").value.trim();
+  if (!src) { status.textContent = "empty"; status.className = "status bad"; return; }
+  let parsed;
+  try { parsed = parseLenient(src); }
+  catch (e) { status.textContent = "parse error"; status.className = "status bad"; err.textContent = "JSON parse failed: " + e.message; err.classList.remove("hidden"); return false; }
+  pastedCases = extractCases(parsed);
+  const pick = $("#casePick");
+  pick.innerHTML = "";
+  pastedCases.forEach((c, i) => {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = c.name;
+    pick.appendChild(o);
+  });
+  $("#casePickRow").classList.toggle("hidden", pastedCases.length < 2);
+  return applyPastedCase(0);
+}
+
+function applyPastedCase(idx) {
+  const status = $("#rawStatus");
+  const err = $("#err");
+  err.classList.add("hidden");
+  const parsed = pastedCases[idx] && pastedCases[idx].request;
+  const errs = validateRequest(parsed);
+  if (errs.length) {
+    status.className = "status bad";
+    status.textContent = `invalid (${errs.length} issue${errs.length===1?"":"s"})`;
+    err.textContent = "Invalid request:\n• " + errs.join("\n• ");
+    err.classList.remove("hidden");
+    return false;
+  }
+  // commit: stuff into PROFILES.custom so buildRequest picks it up next time
+  // sort hours by hour so the optimizer always sees 0..23
+  const hours = parsed.hours.slice().sort((a,b)=>a.hour-b.hour);
+  PROFILES.custom = {
+    scenario_id: parsed.scenario_id,
+    operator_notes: parsed.operator_notes.map(s => s),
+    hours,
+    battery: { ...parsed.battery },
+  };
+  // mirror into the visible form
+  $("#profile").value = "custom";
+  $("#sid").value = parsed.scenario_id;
+  $$("#notesArea textarea").forEach((t)=>{
+    const i = +t.dataset.i;
+    t.value = parsed.operator_notes[i] || "";
+  });
+  const b = parsed.battery;
+  $("#bCap").value = b.capacity_kwh;
+  $("#bInit").value = b.initial_energy_kwh;
+  $("#bMin").value = b.minimum_energy_kwh;
+  $("#bCh").value = b.max_charge_kwh_per_hour;
+  $("#bDis").value = b.max_discharge_kwh_per_hour;
+  status.className = "status ok";
+  status.textContent = `loaded ${parsed.scenario_id}${pastedCases.length > 1 ? ` (case ${idx + 1}/${pastedCases.length})` : ""} · ${parsed.operator_notes.length} note${parsed.operator_notes.length===1?"":"s"} · 24 hours`;
+  return true;
+}
+
+async function run(){
+  const err = $("#err");
+  err.classList.add("hidden");
+  const btn = $("#runBtn");
+  const status = $("#status");
+  btn.disabled = true; status.textContent = "calling /optimize-energy …"; status.className = "status busy";
+  try {
+    const body = buildRequest();
+    const { json, ms } = await callApi(body);
+    // the API plan omits the inputs; merge demand/tariff back in for display
+    const byHour = Object.fromEntries(body.hours.map(h => [h.hour, h]));
+    (json.hourly_plan || []).forEach(p => {
+      const h = byHour[p.hour] || {};
+      p.demand_kwh ??= h.demand_kwh;
+      p.tariff_bdt_per_kwh ??= h.tariff_bdt_per_kwh;
+      p.solar_kwh ??= p.solar_used_kwh;
+    });
+    renderResult(json, ms);
+    status.textContent = `done · ${ms} ms`; status.className = "status ok";
+  } catch (e) {
+    err.textContent = String(e.message || e);
+    err.classList.remove("hidden");
+    status.textContent = "failed"; status.className = "status bad";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderChips();
+  fillFromSample();
+  $("#fillBtn").onclick = fillFromSample;
+  $("#profile").onchange = fillFromSample;
+  $("#runBtn").onclick = run;
+  $("#rawLoadBtn").onclick = loadFromRawJson;
+  $("#rawRunBtn").onclick = () => { if (loadFromRawJson()) run(); };
+  $("#casePick").onchange = (e) => applyPastedCase(+e.target.value);
+
+  // re-render chart on resize for crispness
+  let lastJson = null;
+  const orig = renderResult;
+  // patch renderResult to remember last json for resize
+  // (keeps the rest of the function unchanged)
+  // eslint-disable-next-line no-func-assign
+  renderResult = function(j, ms){ lastJson = j; orig(j, ms); };
+  window.addEventListener("resize", ()=>{ if (lastJson && !$("#result").classList.contains("hidden")) renderChart(lastJson.hourly_plan||[]); });
+});
+</script>
+</body>
+</html>
