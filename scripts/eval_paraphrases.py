@@ -41,10 +41,19 @@ def main():
 
     path = os.path.join(os.path.dirname(__file__), "..", "tests", "paraphrase_cases.json")
     data = json.load(open(path))
-    cap, cases = data["capacity_kwh"], data["cases"]
+    cases = data["cases"]
+    # batch notes that share a battery capacity (needed for % reserves)
+    chunks, cur = [], []
+    for c in cases:
+        c.setdefault("capacity_kwh", data["capacity_kwh"])
+        if cur and (len(cur) == args.batch or cur[0]["capacity_kwh"] != c["capacity_kwh"]):
+            chunks.append(cur)
+            cur = []
+        cur.append(c)
+    chunks.append(cur)
     ok, latencies = 0, []
-    for start in range(0, len(cases), args.batch):
-        chunk = cases[start:start + args.batch]
+    for chunk in chunks:
+        cap = chunk[0]["capacity_kwh"]
         notes = [c["note"] for c in chunk]
         t = time.monotonic()
         if args.fallback:

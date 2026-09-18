@@ -1,7 +1,7 @@
 """Run public sample cases against a running service and validate every response.
 
 Usage:
-  python scripts/run_samples.py --url http://localhost:8000 [--file samples/public_cases.json]
+  python scripts/run_samples.py --url http://localhost:8000 [--file samples/BUP_CSE_FEST_2026_Preli_Public_Sample_Cases.json]
 
 Accepts a JSON file that is either a list of cases or {"cases": [...]}. Each case may be the
 raw request itself, or an object with the request under "request"/"input" and optional expected
@@ -40,7 +40,7 @@ def load_cases(path):
         req = next((c[k] for k in ("request", "input", "scenario", "request_body") if isinstance(c.get(k), dict)), c)
         exp = next((c[k] for k in ("expected", "expected_response", "expected_output", "output", "response")
                     if isinstance(c.get(k), dict)), None)
-        out.append((c.get("name") or req.get("scenario_id"), req, exp))
+        out.append((c.get("id") or c.get("name") or req.get("scenario_id"), req, exp))
     return out
 
 
@@ -75,7 +75,7 @@ def compare_interp(ours, expected):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://localhost:8000")
-    ap.add_argument("--file", default=os.path.join(os.path.dirname(__file__), "..", "samples", "public_cases.json"))
+    ap.add_argument("--file", default=os.path.join(os.path.dirname(__file__), "..", "samples", "BUP_CSE_FEST_2026_Preli_Public_Sample_Cases.json"))
     args = ap.parse_args()
     base = args.url.rstrip("/")
 

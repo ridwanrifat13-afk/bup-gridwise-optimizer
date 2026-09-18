@@ -43,7 +43,7 @@ curl -X POST http://localhost:8000/optimize-energy \
 Run the organizer public samples. The script validates the schema, interpretation, full plan replay and cost:
 
 ```bash
-python scripts/run_samples.py --url http://localhost:8000 --file samples/public_cases.json
+python scripts/run_samples.py --url http://localhost:8000 --file samples/BUP_CSE_FEST_2026_Preli_Public_Sample_Cases.json
 ```
 
 Expected result: every case prints `[PASS]`, followed by a summary line `N/N passed   p95 latency …`.
@@ -55,7 +55,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-LLM paraphrase-robustness check (36 hand-written paraphrases and distractors, needs the key):
+LLM paraphrase-robustness check (54 notes: 36 hand-written paraphrases/distractors + the 18 public-sample notes, needs the key):
 
 ```bash
 python scripts/eval_paraphrases.py

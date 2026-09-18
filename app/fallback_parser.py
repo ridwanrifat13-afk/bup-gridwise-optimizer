@@ -109,7 +109,7 @@ def parse_note(note: str) -> dict:
     if not ranges:
         return no_op
 
-    negative = bool(re.search(r"\b(not|no|never|avoid|prohibit\w*|block\w*|unavailable|disabled?|forbid\w*|must not|don't|cannot|can't|halt|suspend\w*|pause\w*)\b", t))
+    negative = bool(re.search(r"\b(not|no|never|avoid|prohibit\w*|block\w*|unavailable|disabled?|forbid\w*|must not|don't|cannot|can't|halt|suspend\w*|pause\w*|locked out|lockout|isolated|offline|out of service|disconnected)\b", t))
     pct = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", t)
 
     if re.search(r"\b(grid|import\w*|purchas\w*|utility|draw from the grid|buy\w*)\b", t) and \
