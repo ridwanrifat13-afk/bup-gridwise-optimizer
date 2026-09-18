@@ -68,21 +68,27 @@ python scripts/eval_paraphrases.py
 
 ## 2. Docker fallback image
 
-The `Dockerfile` builds a linux/amd64 image (python:3.12-slim, uvicorn, non-root user, built-in health check). No secrets are baked in; it listens on port **8000**, bound to `0.0.0.0`. Use the `PORT` env var to change the port.
+**Image:** `docker.io/ridwanrifat13afk/gridwise-optimizer:v1.0.0` (public, linux/amd64)
+**Digest:** `sha256:560e030966cb5ef7e3a30270a5e370f400aef30c4b986dabb2fa0688ad9abe1c`
 
-Build and run locally:
+- Port **8000**, bound to `0.0.0.0` (override with `-e PORT=...`).
+- Required env var: `GEMINI_API_KEY`. Optional: the other variables in section 3.
+- Runs as a non-root user with a built-in health check. No secrets are baked into the image.
 
 ```bash
-docker build --platform linux/amd64 -t gridwise-optimizer .
-docker run --rm -p 8000:8000 -e GEMINI_API_KEY=<your-key> gridwise-optimizer
+docker pull ridwanrifat13afk/gridwise-optimizer:v1.0.0
+docker run --rm -p 8000:8000 -e GEMINI_API_KEY=<your-key> ridwanrifat13afk/gridwise-optimizer:v1.0.0
 curl http://localhost:8000/health
+# {"status":"ok"}
+curl -X POST http://localhost:8000/optimize-energy -H "Content-Type: application/json" -d @samples/example_request.json
 ```
 
-Publish to Docker Hub (replace `<DOCKERHUB_USER>` with your Docker Hub username):
+Verified: a fresh pull reports `/health` ready in about 3 s and returns the expected SAMPLE-01 cost.
+
+Rebuild and publish (from the repo root):
 
 ```bash
-docker buildx build --platform linux/amd64 -t <DOCKERHUB_USER>/gridwise-optimizer:v1.0.0 --push .
-docker run --rm -p 8000:8000 -e GEMINI_API_KEY=<your-key> <DOCKERHUB_USER>/gridwise-optimizer:v1.0.0
+docker buildx build --platform linux/amd64 -t ridwanrifat13afk/gridwise-optimizer:v1.0.0 --push .
 ```
 
 ## 3. Configuration (environment variables)
