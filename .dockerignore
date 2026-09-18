@@ -1,0 +1,14 @@
+.env
+.env.*
+.venv
+.git
+__pycache__
+*.pyc
+.pytest_cache
+.vercel
+.puku
+.claude
+tests
+samples
+scripts
+results
