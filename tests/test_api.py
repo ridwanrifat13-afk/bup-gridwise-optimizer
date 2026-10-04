@@ -14,6 +14,7 @@ client = TestClient(app, raise_server_exceptions=False)
 @pytest.fixture(autouse=True)
 def no_llm(monkeypatch):
     monkeypatch.setattr(config, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
 
 
 def test_health():
