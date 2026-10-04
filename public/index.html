@@ -625,7 +625,8 @@ function buildRequest() {
 // ───────── API call ─────────
 async function callApi(body) {
   const base = $("#baseUrl").value.trim().replace(/\/+$/,"");
-  const url = (base || "") + "/optimize-energy";
+  const fallbackBase = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
+  const url = (base || fallbackBase) + "/optimize-energy";
   $("#apiUrl").textContent = "api: " + (url.startsWith("http") ? url : location.origin + url);
   const t0 = performance.now();
   const res = await fetch(url, {
