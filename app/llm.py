@@ -71,9 +71,13 @@ def _llm_raw(notes: list[str], capacity: float, feedback: str | None, deadline: 
     return None
 
 
+PROMPT_VERSION = "v1.1"
+
+
 def interpret_notes(notes: list[str], capacity: float) -> tuple[list[dict], dict]:
     """Return (directive_interpretation entries in note order, metadata)."""
-    key = hashlib.sha256(json.dumps([notes, capacity]).encode()).hexdigest()
+    cache_payload = [notes, capacity, config.GEMINI_MODEL, PROMPT_VERSION]
+    key = hashlib.sha256(json.dumps(cache_payload, sort_keys=True).encode()).hexdigest()
     if key in _cache:
         _cache.move_to_end(key)
         return json.loads(json.dumps(_cache[key])), {"source": "cache"}

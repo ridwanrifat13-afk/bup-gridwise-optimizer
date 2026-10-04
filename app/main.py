@@ -52,7 +52,7 @@ def _summary(scenario: Scenario, interp: list[dict], plan: list[dict], tot: dict
     charge = [p["hour"] for p in plan if p["battery_action"] == "charge"]
     discharge = [p["hour"] for p in plan if p["battery_action"] == "discharge"]
     parts = [
-        f"Applied {len(applied)} operator directive(s)" + (f" ({', '.join(applied)})" if applied else ""),
+        f"Applied {len(applied)} operator directive(s)" + (f" ({', '.join(applied)})." if applied else "."),
         f"{len(interp) - len(applied)} note(s) ignored as no_op.",
         f"Battery charges in hours {charge or 'none'} and discharges in hours {discharge or 'none'}, "
         f"ending at its initial {scenario.battery.initial_energy_kwh} kWh.",
@@ -82,11 +82,24 @@ async def optimize_energy(request: Request):
     dropped = [directives[i] for i in dropped_idx]
     tot = totals(plan, scenario)
 
+    raw_source = meta.get("source", "")
+    interp_source = "llm" if raw_source in ("llm", "cache") else "rule_based_fallback"
+    input_demand = round(sum(h.demand_kwh for h in scenario.hours), 4)
+    input_solar = round(sum(h.solar_kwh for h in scenario.hours), 4)
+    input_min_tariff = round(min(h.tariff_bdt_per_kwh for h in scenario.hours), 4)
+    input_max_tariff = round(max(h.tariff_bdt_per_kwh for h in scenario.hours), 4)
+
     response = {
         "scenario_id": scenario.scenario_id,
         "directive_interpretation": interp,
         "hourly_plan": plan,
         **tot,
+        "profile_source": scenario.profile_source,
+        "interpreter_source": interp_source,
+        "input_total_demand_kwh": input_demand,
+        "input_total_solar_kwh": input_solar,
+        "input_min_tariff_bdt": input_min_tariff,
+        "input_max_tariff_bdt": input_max_tariff,
         "plan_summary": _summary(scenario, interp, plan, tot, dropped),
     }
 

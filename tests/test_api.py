@@ -31,8 +31,12 @@ def test_full_response_contract():
     r = client.post("/optimize-energy", json=body)
     assert r.status_code == 200
     data = r.json()
-    assert set(data) == {"scenario_id", "directive_interpretation", "hourly_plan", "total_grid_kwh",
-                         "total_cost_bdt", "peak_grid_kwh", "plan_summary"}
+    assert set(data) == {
+        "scenario_id", "directive_interpretation", "hourly_plan", "total_grid_kwh",
+        "total_cost_bdt", "peak_grid_kwh", "plan_summary", "profile_source",
+        "interpreter_source", "input_total_demand_kwh", "input_total_solar_kwh",
+        "input_min_tariff_bdt", "input_max_tariff_bdt"
+    }
     assert data["scenario_id"] == "GRID-101"
     interp = data["directive_interpretation"]
     assert validate_interpretation(interp, 3) == []
@@ -90,3 +94,90 @@ def test_semantic_error_422():
 
 def test_non_object_body():
     assert client.post("/optimize-energy", json=[1, 2]).status_code == 400
+
+
+def test_canonical_and_aliases_accepted():
+    body = make_scenario(1)
+    # Hour 0 uses canonical keys
+    body["hours"][0] = {"hour": 0, "demand_kwh": 100.0, "solar_kwh": 20.0, "tariff_bdt_per_kwh": 8.0}
+    # Hour 1 uses aliases (load, pv, price)
+    body["hours"][1] = {"hour": 1, "load": 110.0, "pv": 15.0, "price": 9.0}
+    # Hour 2 uses other aliases (demand, solar, tariff)
+    body["hours"][2] = {"hour": 2, "demand": 120.0, "solar": 25.0, "tariff": 10.0}
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["hourly_plan"]) == 24
+    # Parse directly to verify normalized hours
+    scenario = parse_scenario(body)
+    assert scenario.hours[0].demand_kwh == 100.0
+    assert scenario.hours[1].demand_kwh == 110.0
+    assert scenario.hours[2].demand_kwh == 120.0
+    assert scenario.hours[1].solar_kwh == 15.0
+    assert scenario.hours[1].tariff_bdt_per_kwh == 9.0
+    assert data["input_total_demand_kwh"] == round(sum(h.demand_kwh for h in scenario.hours), 4)
+
+
+def test_conflicting_canonical_and_alias_gives_400():
+    body = make_scenario(1)
+    body["hours"][3] = {"hour": 3, "demand_kwh": 100.0, "demand": 150.0, "solar_kwh": 0.0, "tariff_bdt_per_kwh": 8.0}
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 400
+    assert "conflicting values for hours[3].demand_kwh and alias 'demand'" in r.json()["error"]
+
+
+def test_missing_field_gives_400_naming_exact_path():
+    body = make_scenario(1)
+    # Remove tariff from hour 5
+    body["hours"][5].pop("tariff_bdt_per_kwh")
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 400
+    assert "hours[5].tariff_bdt_per_kwh is missing" in r.json()["error"]
+
+
+def test_23_entries_gives_400():
+    body = make_scenario(1)
+    body["hours"].pop()  # now 23 entries
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 400
+    assert "'hours' must be an array of exactly 24 entries" in r.json()["error"]
+
+
+def test_duplicate_hour_gives_400():
+    body = make_scenario(1)
+    body["hours"][10]["hour"] = 9  # duplicate hour 9
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 400
+    assert "duplicate hour 9" in r.json()["error"]
+
+
+def test_optional_hour_absent_uses_array_order():
+    body = make_scenario(1)
+    for h in body["hours"]:
+        h.pop("hour")  # remove 'hour' key completely
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 200
+    plan = r.json()["hourly_plan"]
+    assert len(plan) == 24
+    for i, p in enumerate(plan):
+        assert p["hour"] == i
+
+
+def test_profile_source_and_input_totals_echo():
+    body = make_scenario(1, sid="CUSTOM-SCENARIO")
+    body["profile_source"] = "custom"
+    # set predictable values
+    for i, h in enumerate(body["hours"]):
+        h["demand_kwh"] = 10.0
+        h["solar_kwh"] = 5.0
+        h["tariff_bdt_per_kwh"] = 7.0 if i < 12 else 14.0
+    r = client.post("/optimize-energy", json=body)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["profile_source"] == "custom"
+    assert data["interpreter_source"] == "rule_based_fallback"
+    assert data["input_total_demand_kwh"] == 240.0
+    assert data["input_total_solar_kwh"] == 120.0
+    assert data["input_min_tariff_bdt"] == 7.0
+    assert data["input_max_tariff_bdt"] == 14.0
+

@@ -297,6 +297,15 @@
       </section>
 
       <div id="result" class="col hidden">
+        <div class="card" id="runMetaCard" style="padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);font-size:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px">
+          <div><span style="color:var(--muted)">Profile:</span> <strong id="mProfile" style="color:var(--cream)">custom</strong></div>
+          <div><span style="color:var(--muted)">Interpreter:</span> <strong id="mInterp" style="color:var(--info)">llm</strong></div>
+          <div style="margin-left:auto;display:flex;flex-wrap:wrap;gap:10px;color:var(--muted);font-family:var(--mono);font-size:11px">
+            <span>Demand: <strong id="mDemand" style="color:var(--text)">0</strong> kWh</span>
+            <span>Solar: <strong id="mSolar" style="color:var(--text)">0</strong> kWh</span>
+            <span>Tariff: <strong id="mTariff" style="color:var(--text)">0 - 0</strong> BDT</span>
+          </div>
+        </div>
         <div class="totals">
           <div class="tot" style="--c:var(--info)"><div class="k">Total grid</div><div class="v" id="tGrid">—</div></div>
           <div class="tot" style="--c:var(--accent)"><div class="k">Total cost</div><div class="v" id="tCost">—</div></div>
@@ -425,7 +434,8 @@ FLAT.operator_notes = [
 ];
 FLAT.hours.forEach(h=>{ h.demand_kwh = 200; h.solar_kwh = 0; });
 
-const PROFILES = { workday: SAMPLE_REQUEST, weekend: WEEKEND, flat: FLAT, custom: SAMPLE_REQUEST };
+const PROFILES = { workday: SAMPLE_REQUEST, weekend: WEEKEND, flat: FLAT };
+let customHours = null;
 
 // ───────── DOM helpers ─────────
 const $ = (s, root=document) => root.querySelector(s);
@@ -452,6 +462,125 @@ function renderChips() {
   });
 }
 
+const FIELD_ALIASES = {
+  demand_kwh: ["demand", "demand_kw", "load"],
+  solar_kwh: ["solar", "solar_kw", "pv"],
+  tariff_bdt_per_kwh: ["tariff", "tariff_bdt", "price"],
+};
+
+function normalizeAndValidateHours(hoursRaw) {
+  const errs = [];
+  if (!Array.isArray(hoursRaw) || hoursRaw.length !== 24) {
+    return { hours: null, errors: ["hours must be an array of exactly 24 entries"] };
+  }
+
+  const hasAnyHour = hoursRaw.some(h => h && typeof h === "object" && h.hour !== undefined && h.hour !== null);
+  const normalized = [];
+  const seenHours = new Set();
+
+  for (let i = 0; i < 24; i++) {
+    const h = hoursRaw[i];
+    if (!h || typeof h !== "object" || Array.isArray(h)) {
+      errs.push(`hours[${i}] must be an object`);
+      continue;
+    }
+
+    let hourVal = i;
+    if (hasAnyHour) {
+      if (h.hour === undefined || h.hour === null) {
+        errs.push(`hours[${i}].hour is missing (required 0..23 when hour is provided)`);
+      } else if (!Number.isInteger(h.hour) || h.hour < 0 || h.hour > 23) {
+        errs.push(`hours[${i}].hour must be int 0..23`);
+      } else if (seenHours.has(h.hour)) {
+        errs.push(`hours[${i}].hour ${h.hour} is duplicated`);
+      } else {
+        seenHours.add(h.hour);
+        hourVal = h.hour;
+      }
+    }
+
+    const fields = {};
+    for (const [canonical, aliases] of Object.entries(FIELD_ALIASES)) {
+      const hasCanonical = canonical in h && h[canonical] !== null && h[canonical] !== undefined;
+      const canonicalVal = hasCanonical ? Number(h[canonical]) : null;
+
+      const foundAliases = [];
+      for (const alias of aliases) {
+        if (alias in h && h[alias] !== null && h[alias] !== undefined) {
+          foundAliases.push({ name: alias, val: Number(h[alias]) });
+        }
+      }
+
+      if (!hasCanonical && foundAliases.length === 0) {
+        errs.push(`hours[${i}].${canonical} is missing`);
+        continue;
+      }
+
+      if (hasCanonical) {
+        if (!Number.isFinite(canonicalVal)) {
+          errs.push(`hours[${i}].${canonical} must be a number`);
+          continue;
+        }
+        let conflict = false;
+        for (const a of foundAliases) {
+          if (!Number.isFinite(a.val) || Math.abs(canonicalVal - a.val) > 1e-6) {
+            errs.push(`conflicting values for hours[${i}].${canonical} and alias '${a.name}'`);
+            conflict = true;
+            break;
+          }
+        }
+        if (!conflict) fields[canonical] = canonicalVal;
+      } else {
+        const first = foundAliases[0];
+        if (!Number.isFinite(first.val)) {
+          errs.push(`hours[${i}].${first.name} must be a number`);
+          continue;
+        }
+        let conflict = false;
+        for (let j = 1; j < foundAliases.length; j++) {
+          if (!Number.isFinite(foundAliases[j].val) || Math.abs(first.val - foundAliases[j].val) > 1e-6) {
+            errs.push(`conflicting alias values for hours[${i}].${canonical} ('${first.name}' vs '${foundAliases[j].name}')`);
+            conflict = true;
+            break;
+          }
+        }
+        if (!conflict) fields[canonical] = first.val;
+      }
+    }
+
+    if (fields.demand_kwh !== undefined && fields.solar_kwh !== undefined && fields.tariff_bdt_per_kwh !== undefined) {
+      if (fields.demand_kwh < 0 || fields.solar_kwh < 0) {
+        errs.push(`hour ${hourVal}: demand_kwh and solar_kwh must be non-negative`);
+      }
+      if (fields.tariff_bdt_per_kwh < 0) {
+        errs.push(`hour ${hourVal}: tariff_bdt_per_kwh must be non-negative`);
+      }
+      normalized.push({
+        hour: hourVal,
+        demand_kwh: fields.demand_kwh,
+        solar_kwh: fields.solar_kwh,
+        tariff_bdt_per_kwh: fields.tariff_bdt_per_kwh,
+      });
+    }
+  }
+
+  if (hasAnyHour && !errs.some(e => e.includes("duplicated") || e.includes("hour is missing"))) {
+    if (seenHours.size !== 24) {
+      errs.push("hours must contain each hour 0..23 exactly once");
+    }
+  }
+
+  if (errs.length > 0) {
+    return { hours: null, errors: errs };
+  }
+
+  if (hasAnyHour) {
+    normalized.sort((a, b) => a.hour - b.hour);
+  }
+
+  return { hours: normalized, errors: [] };
+}
+
 // ───────── Build the request body from the form ─────────
 function buildRequest() {
   const notes = $$("#notesArea textarea")
@@ -459,10 +588,28 @@ function buildRequest() {
     .filter(Boolean);
   if (notes.length === 0) throw new Error("add at least one operator note");
   const profileKey = $("#profile").value;
-  const tmpl = PROFILES[profileKey];
-  const hours = tmpl.hours.map(h => ({...h}));
+  let hours;
+  if (profileKey === "custom") {
+    if (!customHours || customHours.length !== 24) {
+      throw new Error("Paste JSON and click Load JSON first");
+    }
+    const validated = normalizeAndValidateHours(customHours);
+    if (validated.errors.length) {
+      throw new Error("Custom hours invalid: " + validated.errors.join(", "));
+    }
+    hours = validated.hours.map(h => ({...h}));
+  } else {
+    const tmpl = PROFILES[profileKey];
+    if (!tmpl) throw new Error(`Unknown profile ${profileKey}`);
+    const validated = normalizeAndValidateHours(tmpl.hours);
+    if (validated.errors.length) {
+      throw new Error(`Profile ${profileKey} invalid: ` + validated.errors.join(", "));
+    }
+    hours = validated.hours.map(h => ({...h}));
+  }
   return {
     scenario_id: $("#sid").value.trim() || "DEMO",
+    profile_source: profileKey,
     operator_notes: notes,
     hours,
     battery: {
@@ -505,6 +652,16 @@ function renderResult(json, ms) {
   $("#tCost").innerHTML = `${fmt(json.total_cost_bdt,2)}<small>BDT</small>`;
   $("#tPeak").innerHTML = `${fmt(json.peak_grid_kwh,1)}<small>kWh</small>`;
   $("#tMs").innerHTML   = `${fmt(ms,0)}<small>ms</small>`;
+
+  if ($("#mProfile")) $("#mProfile").textContent = json.profile_source || "custom";
+  if ($("#mInterp")) {
+    const src = json.interpreter_source || "rule_based_fallback";
+    $("#mInterp").textContent = src;
+    $("#mInterp").style.color = src === "llm" ? "var(--info)" : "var(--accent)";
+  }
+  if ($("#mDemand")) $("#mDemand").textContent = fmt(json.input_total_demand_kwh, 1);
+  if ($("#mSolar")) $("#mSolar").textContent = fmt(json.input_total_solar_kwh, 1);
+  if ($("#mTariff")) $("#mTariff").textContent = `${fmt(json.input_min_tariff_bdt, 0)} to ${fmt(json.input_max_tariff_bdt, 0)}`;
 
   // directives
   const dirs = $("#dirs");
@@ -656,35 +813,34 @@ function fillFromSample(){
 // ───────── Parse + validate a pasted full request JSON ─────────
 function validateRequest(obj) {
   const errs = [];
-  if (!obj || typeof obj !== "object") { return ["root must be an object"]; }
-  if (typeof obj.scenario_id !== "string" || !obj.scenario_id.trim()) errs.push("scenario_id must be a non-empty string");
+  if (!obj || typeof obj !== "object") {
+    return { ok: false, errors: ["root must be an object"], normalizedHours: null };
+  }
+  if (typeof obj.scenario_id !== "string" || !obj.scenario_id.trim()) {
+    errs.push("scenario_id must be a non-empty string");
+  }
   if (!Array.isArray(obj.operator_notes) || obj.operator_notes.length < 1 || obj.operator_notes.length > 3) {
-    errs.push("operator_notes must be an array of 1–3 strings");
+    errs.push("operator_notes must be an array of 1 to 3 strings");
   } else if (!obj.operator_notes.every(s => typeof s === "string" && s.trim())) {
     errs.push("every operator_notes entry must be a non-empty string");
   }
-  if (!Array.isArray(obj.hours) || obj.hours.length !== 24) {
-    errs.push("hours must be an array of exactly 24 entries");
-  } else {
-    const seen = new Set();
-    obj.hours.forEach((h, i) => {
-      if (!h || typeof h !== "object") return errs.push(`hours[${i}] must be an object`);
-      if (!Number.isInteger(h.hour) || h.hour < 0 || h.hour > 23) errs.push(`hours[${i}].hour must be int 0–23`);
-      else if (seen.has(h.hour)) errs.push(`hours[${i}].hour ${h.hour} is duplicated`);
-      seen.add(h.hour);
-      if (typeof h.demand_kwh !== "number" || !Number.isFinite(h.demand_kwh)) errs.push(`hours[${i}].demand_kwh must be a number`);
-      if (typeof h.solar_kwh !== "number" || !Number.isFinite(h.solar_kwh)) errs.push(`hours[${i}].solar_kwh must be a number`);
-      if (typeof h.tariff_bdt_per_kwh !== "number" || !Number.isFinite(h.tariff_bdt_per_kwh)) errs.push(`hours[${i}].tariff_bdt_per_kwh must be a number`);
-    });
+
+  const hourRes = normalizeAndValidateHours(obj.hours);
+  if (hourRes.errors.length) {
+    errs.push(...hourRes.errors);
   }
+
   const b = obj.battery;
-  if (!b || typeof b !== "object") { errs.push("battery must be an object"); }
-  else {
+  if (!b || typeof b !== "object") {
+    errs.push("battery must be an object");
+  } else {
     for (const k of ["capacity_kwh","initial_energy_kwh","minimum_energy_kwh","max_charge_kwh_per_hour","max_discharge_kwh_per_hour"]) {
-      if (typeof b[k] !== "number" || !Number.isFinite(b[k])) errs.push(`battery.${k} must be a number`);
+      if (typeof b[k] !== "number" || !Number.isFinite(b[k])) {
+        errs.push(`battery.${k} must be a number`);
+      }
     }
   }
-  return errs;
+  return { ok: errs.length === 0, errors: errs, normalizedHours: hourRes.hours };
 }
 
 // JSON.parse, retrying once with any unclosed brackets closed (common when copy-pasting a case)
@@ -725,7 +881,7 @@ function extractCases(obj) {
   };
   return (list || [obj]).map((c, i) => {
     const req = unwrap(c);
-    const name = [c && c.id, c && c.label].filter(Boolean).join(" · ") || (req && req.scenario_id) || `case ${i + 1}`;
+    const name = [c && c.id, c && c.label].filter(Boolean).join(" | ") || (req && req.scenario_id) || `case ${i + 1}`;
     return { name, request: req };
   });
 }
@@ -737,10 +893,25 @@ function loadFromRawJson() {
   const err = $("#err");
   err.classList.add("hidden");
   const src = $("#rawReq").value.trim();
-  if (!src) { status.textContent = "empty"; status.className = "status bad"; return; }
+  if (!src) {
+    customHours = null;
+    status.textContent = "error: JSON input is empty";
+    status.className = "status bad";
+    err.textContent = "Please paste a JSON request first.";
+    err.classList.remove("hidden");
+    return false;
+  }
   let parsed;
-  try { parsed = parseLenient(src); }
-  catch (e) { status.textContent = "parse error"; status.className = "status bad"; err.textContent = "JSON parse failed: " + e.message; err.classList.remove("hidden"); return false; }
+  try {
+    parsed = parseLenient(src);
+  } catch (e) {
+    customHours = null;
+    status.textContent = "error: JSON parse failed";
+    status.className = "status bad";
+    err.textContent = "JSON parse failed: " + e.message;
+    err.classList.remove("hidden");
+    return false;
+  }
   pastedCases = extractCases(parsed);
   const pick = $("#casePick");
   pick.innerHTML = "";
@@ -758,23 +929,16 @@ function applyPastedCase(idx) {
   const err = $("#err");
   err.classList.add("hidden");
   const parsed = pastedCases[idx] && pastedCases[idx].request;
-  const errs = validateRequest(parsed);
-  if (errs.length) {
+  const res = validateRequest(parsed);
+  if (!res.ok) {
+    customHours = null;
     status.className = "status bad";
-    status.textContent = `invalid (${errs.length} issue${errs.length===1?"":"s"})`;
-    err.textContent = "Invalid request:\n• " + errs.join("\n• ");
+    status.textContent = `error: ${res.errors[0]}${res.errors.length > 1 ? ` (+${res.errors.length - 1} more)` : ""}`;
+    err.textContent = "Invalid request:\n* " + res.errors.join("\n* ");
     err.classList.remove("hidden");
     return false;
   }
-  // commit: stuff into PROFILES.custom so buildRequest picks it up next time
-  // sort hours by hour so the optimizer always sees 0..23
-  const hours = parsed.hours.slice().sort((a,b)=>a.hour-b.hour);
-  PROFILES.custom = {
-    scenario_id: parsed.scenario_id,
-    operator_notes: parsed.operator_notes.map(s => s),
-    hours,
-    battery: { ...parsed.battery },
-  };
+  customHours = res.normalizedHours.map(h => ({ ...h }));
   // mirror into the visible form
   $("#profile").value = "custom";
   $("#sid").value = parsed.scenario_id;
@@ -789,8 +953,30 @@ function applyPastedCase(idx) {
   $("#bCh").value = b.max_charge_kwh_per_hour;
   $("#bDis").value = b.max_discharge_kwh_per_hour;
   status.className = "status ok";
-  status.textContent = `loaded ${parsed.scenario_id}${pastedCases.length > 1 ? ` (case ${idx + 1}/${pastedCases.length})` : ""} · ${parsed.operator_notes.length} note${parsed.operator_notes.length===1?"":"s"} · 24 hours`;
+  const caseTag = pastedCases.length > 1 ? ` (case ${idx + 1}/${pastedCases.length})` : "";
+  status.textContent = `loaded ${parsed.scenario_id}${caseTag} | ${parsed.operator_notes.length} note(s) | 24 hours`;
   return true;
+}
+
+function onProfileChange() {
+  const profileKey = $("#profile").value;
+  if (profileKey === "custom" && (!customHours || customHours.length !== 24)) {
+    const rawStatus = $("#rawStatus");
+    if (rawStatus) {
+      rawStatus.className = "status";
+      rawStatus.textContent = "custom profile selected: paste JSON and click Load JSON";
+    }
+  }
+}
+
+function resetProfilePreset() {
+  customHours = null;
+  $("#profile").value = "workday";
+  const rawStatus = $("#rawStatus");
+  if (rawStatus) {
+    rawStatus.className = "status";
+    rawStatus.textContent = "profile reset to workday preset";
+  }
 }
 
 async function run(){
@@ -798,7 +984,7 @@ async function run(){
   err.classList.add("hidden");
   const btn = $("#runBtn");
   const status = $("#status");
-  btn.disabled = true; status.textContent = "calling /optimize-energy …"; status.className = "status busy";
+  btn.disabled = true; status.textContent = "calling /optimize-energy ..."; status.className = "status busy";
   try {
     const body = buildRequest();
     const { json, ms } = await callApi(body);
@@ -811,7 +997,7 @@ async function run(){
       p.solar_kwh ??= p.solar_used_kwh;
     });
     renderResult(json, ms);
-    status.textContent = `done · ${ms} ms`; status.className = "status ok";
+    status.textContent = `done | ${ms} ms`; status.className = "status ok";
   } catch (e) {
     err.textContent = String(e.message || e);
     err.classList.remove("hidden");
@@ -824,8 +1010,8 @@ async function run(){
 document.addEventListener("DOMContentLoaded", () => {
   renderChips();
   fillFromSample();
-  $("#fillBtn").onclick = fillFromSample;
-  $("#profile").onchange = fillFromSample;
+  $("#fillBtn").onclick = resetProfilePreset;
+  $("#profile").onchange = onProfileChange;
   $("#runBtn").onclick = run;
   $("#rawLoadBtn").onclick = loadFromRawJson;
   $("#rawRunBtn").onclick = () => { if (loadFromRawJson()) run(); };

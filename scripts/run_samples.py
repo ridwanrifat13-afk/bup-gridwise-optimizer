@@ -22,8 +22,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.schemas import parse_scenario  # noqa: E402
 from app.validator import validate_interpretation, validate_plan  # noqa: E402
 
-TOP_KEYS = {"scenario_id", "directive_interpretation", "hourly_plan", "total_grid_kwh",
-            "total_cost_bdt", "peak_grid_kwh", "plan_summary"}
+TOP_KEYS = {
+    "scenario_id", "directive_interpretation", "hourly_plan", "total_grid_kwh",
+    "total_cost_bdt", "peak_grid_kwh", "plan_summary", "profile_source",
+    "interpreter_source", "input_total_demand_kwh", "input_total_solar_kwh",
+    "input_min_tariff_bdt", "input_max_tariff_bdt"
+}
 
 
 def load_cases(path):
