@@ -1,7 +1,7 @@
 """Measure interpretation accuracy on tests/paraphrase_cases.json.
 
 Usage:
-  python scripts/eval_paraphrases.py              # LLM (needs GEMINI_API_KEY)
+  python scripts/eval_paraphrases.py              # LLM (needs OPENROUTER_API_KEY / GEMINI_API_KEY)
   python scripts/eval_paraphrases.py --fallback   # rule-based safety net only
 """
 import argparse

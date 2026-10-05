@@ -1,14 +1,32 @@
+# Environment & Secrets (NEVER commit secrets to public repositories)
 .env
 .env.*
+.env*.local
 !.env.example
+
+# Python virtual environment & bytecode
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .pytest_cache/
-.vercel/
+
+# IDE & Agent workspace tools
+.agents/
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
 .DS_Store
+Thumbs.db
+
+# Vercel & Deploy caches
+.vercel/
+.vercel
+
+# Logs & temp artifacts
+results/
 .puku/
 .claude/
-results/
-.vercel
-.env*.local
+*.log

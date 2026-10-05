@@ -1,11 +1,11 @@
 # GridWise LLM Energy Optimizer (BUP CSE Fest 2026 Hackathon, Preliminary)
 
-This HTTP API reads natural-language **operator notes** with an LLM (Google Gemini) and turns them into structured directives. It validates those directives with deterministic guardrails, then solves a **linear program** to produce the cheapest valid 24-hour grid / solar / battery schedule for the campus.
+This HTTP API reads natural-language **operator notes** with an LLM (NVIDIA Nemotron 3 Ultra 550B via OpenRouter, with Google Gemini fallback) and turns them into structured directives. It validates those directives with deterministic guardrails, then solves a **linear program** to produce the cheapest valid 24-hour grid / solar / battery schedule for the campus.
 
 ```
  request ──► LLM interpreter ──► guardrail validator ──► LP optimizer ──► final replay validator ──► JSON response
-            (Gemini, JSON schema)  (types, hours, ranges,   (scipy HiGHS,     (re-checks every GridWise
-                                     applies, shapes)         exact optimum)    + directive rule)
+            (Nemotron/Gemini,      (types, hours, ranges,   (scipy HiGHS,     (re-checks every GridWise
+             JSON schema)           applies, shapes)         exact optimum)    + directive rule)
 ```
 
 | Endpoint | Description |
@@ -22,7 +22,7 @@ This HTTP API reads natural-language **operator notes** with an LLM (Google Gemi
 
 ## 1. Quickstart (local, from a clean machine)
 
-Requirements: Python 3.12+ and a Gemini API key (https://aistudio.google.com/apikey).
+Requirements: Python 3.12+ and an OpenRouter API key with NVIDIA Nemotron 3 Ultra (https://openrouter.ai/keys) or a Gemini API key.
 
 ```bash
 git clone https://github.com/ridwanrifat13-afk/bup-gridwise-optimizer.git
@@ -30,7 +30,7 @@ cd bup-gridwise-optimizer
 python3 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                 # then put your key in .env: GEMINI_API_KEY=...
+cp .env.example .env                 # then put your key in .env: OPENROUTER_API_KEY=...
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -95,23 +95,24 @@ docker buildx build --platform linux/amd64 -t ridwanrifat13afk/gridwise-optimize
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `GEMINI_API_KEY` | **yes** | — | Google Gemini API key |
-| `GEMINI_MODEL` | no | `gemini-3.5-flash` | Primary interpreter model |
-| `GEMINI_FALLBACK_MODEL` | no | `gemini-flash-lite-latest` | Used if the primary errors out / is rate-limited |
-| `GEMINI_THINKING_BUDGET` | no | `0` | Thinking tokens (0 = fastest, -1 = model default) |
-| `LLM_TIMEOUT_SECONDS` | no | `10` | Per LLM call timeout |
-| `LLM_TOTAL_BUDGET_SECONDS` | no | `22` | Total LLM time budget per request (judge limit is 30 s) |
+| `OPENROUTER_API_KEY` | **yes** (or `GEMINI_API_KEY`) | — | OpenRouter API key (supports NVIDIA Nemotron 3 Ultra) |
+| `OPENROUTER_MODEL` | no | `nvidia/nemotron-3-ultra-550b-a55b` | Primary interpreter model |
+| `OPENROUTER_FALLBACK_MODEL` | no | `nvidia/nemotron-3-ultra-550b-a55b:free` | Fallback model if primary errors out |
+| `OPENROUTER_REASONING_EFFORT` | no | `none` | Reasoning effort level |
+| `GEMINI_API_KEY` | optional | — | Google Gemini API key (legacy/alternative provider) |
+| `GEMINI_MODEL` | no | `gemini-3.5-flash` | Alternative Gemini model |
+| `GEMINI_FALLBACK_MODEL` | no | `gemini-flash-lite-latest` | Used if Gemini primary errors out |
+| `LLM_TIMEOUT_SECONDS` | no | `15` | Per LLM call timeout |
+| `LLM_TOTAL_BUDGET_SECONDS` | no | `25` | Total LLM time budget per request (well within 60s timeout) |
 | `LOG_LEVEL` | no | `INFO` | Logging level |
 
 Values are whitespace-trimmed, so a key or model name pasted into a dashboard with a trailing newline still works.
 
-> **Quota note:** judges send many requests in a short window. On the Gemini free tier the primary model can return `429 Too Many Requests`, which pushes requests onto the fallback model or the rule-based safety net. Use a key with billing enabled for judging.
-
 ## 4. How it works
 
 ### 4.1 LLM role (the mandatory interpretation step)
-- **Model / provider:** Google Gemini `gemini-3.5-flash` through the `google-genai` SDK, with `gemini-flash-lite-latest` as the automatic fallback model. Both are configurable (section 3).
-- **One call per request** interprets all 1 to 3 notes together. It uses temperature 0 and a strict `response_schema`, so the output is JSON.
+- **Model / provider:** NVIDIA Nemotron 3 Ultra (`nvidia/nemotron-3-ultra-550b-a55b`) via OpenRouter, with automatic fallback and optional Google Gemini support. Both are configurable (section 3).
+- **One call per request** interprets all 1 to 3 notes together. It uses temperature 0 and a strict JSON schema requirement, ensuring fast, deterministic structured output.
 - The LLM decides for each note whether it `applies`, which `directive_type` it is (one of the 6 supported types), the time windows, and the numeric values. The prompt (`app/prompt.py`) encodes the spec conventions:
   - Start hour included, end hour excluded.
   - `factor` is the fraction of solar that *remains*.
@@ -186,7 +187,7 @@ Every response is replayed hour by hour against all GridWise and directive rules
 - **Branding:** GridWise logo and icons in `public/assets/`, colour palette `#000000 · #1F150C · #412D15 · #E1DCC9`.
 
 ## 6. Deployment
-- **Live:** Vercel serverless Python (`api/index.py` + `vercel.json`). `/` serves the dashboard, `/assets/*` serves static files, and every other path is rewritten to FastAPI. `GEMINI_API_KEY`, `GEMINI_MODEL` and `GEMINI_FALLBACK_MODEL` are set in the Vercel project environment variables.
+- **Live:** Vercel serverless Python (`api/index.py` + `vercel.json`). `/` serves the dashboard, `/assets/*` serves static files, and every other path is rewritten to FastAPI. `OPENROUTER_API_KEY` (or `GEMINI_API_KEY`) is set in the Vercel project environment variables.
 - **Deploy:** `vercel --prod` from the repo root (the project is linked in `.vercel/`, which is git-ignored).
 - **Fallback:** the Docker image above (`Dockerfile`, python:3.12-slim, uvicorn with 2 workers, non-root user).
 
@@ -195,8 +196,8 @@ Every response is replayed hour by hour against all GridWise and directive rules
 ```
 app/main.py            FastAPI app & pipeline
 app/schemas.py         request parsing & 400/422 validation
-app/prompt.py          system prompt, few-shots, Gemini response schema
-app/llm.py             Gemini call, retry-with-feedback, model fallback, cache
+app/prompt.py          system prompt, few-shots, JSON schema
+app/llm.py             OpenRouter (Nemotron 3 Ultra) & Gemini call, retry, cache
 app/guardrails.py      deterministic validation / normalisation of LLM output
 app/fallback_parser.py rule-based safety net (provider outage only)
 app/constraints.py     directives -> per-hour limits
@@ -204,7 +205,7 @@ app/optimizer.py       LP optimizer & plan construction
 app/validator.py       judge-style replay validator
 api/index.py           Vercel entrypoint
 public/index.html      web demo dashboard (served at / on Vercel)
-public/assets/         logo, favicon and app icon
+public/assets/         site background, logo, favicon and app icon
 scripts/run_samples.py public sample runner / validator
 scripts/eval_paraphrases.py  LLM paraphrase accuracy check
 tests/                 pytest suite + paraphrase set
@@ -213,19 +214,19 @@ tests/                 pytest suite + paraphrase set
 ## 8. Dependencies & credits
 - FastAPI, Uvicorn, Pydantic (web)
 - NumPy and SciPy with HiGHS (optimization)
-- `google-genai` (Gemini API)
+- `httpx` (OpenRouter API client for NVIDIA Nemotron 3 Ultra)
+- `google-genai` (optional Gemini API fallback)
 - python-dotenv
 - pytest and httpx (tests)
-- AI coding assistant (Claude Code) was used to help write code and docs. The architecture and design decisions are the team's.
 
 ## 9. Known limitations
-- Interpretation quality depends on the Gemini API being available. During an outage, the rule-based safety net handles common phrasings, but it is less robust to unusual paraphrases.
+- Interpretation quality depends on the LLM API being available. During an outage, the rule-based safety net handles common phrasings, but it is less robust to unusual paraphrases.
 - Each note is mapped to exactly one directive, as the spec requires. A note that describes two constraints keeps the dominant one.
 - Grid export isn't modelled, since it isn't part of the challenge. Unused solar is curtailed.
 - The in-memory interpretation cache is per process or instance.
-- The dashboard's "API base URL" field only works for the same origin; the API does not enable CORS, so the browser blocks calls to other hosts.
+- The backend has full CORS support enabled (`CORSMiddleware`) allowing modern cross-origin requests.
 
 ## 10. Secret handling
-- `GEMINI_API_KEY` is read only from the environment (`.env` locally, the Vercel env settings, or `docker run -e`).
-- `.env` is git-ignored and docker-ignored, and no key is committed or baked into the image.
+- `OPENROUTER_API_KEY` (or `GEMINI_API_KEY`) is read only from the environment (`.env` locally, the Vercel env settings, or `docker run -e`).
+- `.env` is strictly git-ignored and docker-ignored, and no key is ever committed or baked into Docker or public repositories.
 - Logs contain scenario IDs, directive types, timings and error *class names* only. They never include keys, prompts or stack traces, and error responses are generic.
